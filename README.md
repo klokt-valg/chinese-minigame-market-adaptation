@@ -49,5 +49,35 @@ One of the biggest drawback is that their SDKs are still closed-sourced, and com
 ### Unity game to Tiktok minigame
 
 
+1. When running converted app on Tiktok Developer Tool, I see an error like `s.doAccess() does not exist`.
 
+  Add the following snippet to the `webgl.framework.js` in the `zip` file.
+  ```javascript
+  var SYSCALL = Module.SYSCALL = {...,
+    doAccess: function(path, amode) {
+      if (amode & ~7) {
+        // need a valid mode
+        return -28;
+      }
+      try {
+        var lookup = FS.lookupPath(path, { follow: true });
+        var node = lookup.node;
+        if (!node) {
+          return -44;
+        }
+        var perms = '';
+        if (amode & 4) perms += 'r';
+        if (amode & 2) perms += 'w';
+        if (amode & 1) perms += 'x';
+        if (perms /* otherwise, they've just passed F_OK */ && FS.nodePermissions(node, perms)) {
+          return -2;
+        }
+        return 0;
+      } catch (e) {
+        if (typeof FS == 'undefined' || !(e.name === 'ErrnoError')) throw e;
+        return -e.errno;
+      }
+    }
+  }
+  ```
 
