@@ -49,35 +49,56 @@ One of the biggest drawback is that their SDKs are still closed-sourced, and com
 ### Unity game to Tiktok minigame
 
 
-1. When running converted app on Tiktok Developer Tool, I see an error like `s.doAccess() does not exist`.
+#### When running converted app on Tiktok Developer Tool, I see an error like `s.doAccess() does not exist`.
 
-  Add the following snippet to the `webgl.framework.js` in the `zip` file.
-  ```javascript
-  var SYSCALL = Module.SYSCALL = {...,
-    doAccess: function(path, amode) {
-      if (amode & ~7) {
-        // need a valid mode
-        return -28;
+Here's the error message:
+```
+uncaught (in promise) TypeError: s.doAccess is not a function
+    at ___syscall_faccessat (abfs-syscalls.ts:95)
+    at access (wasm://wasm/09f1a45a:wasm-function[1046]:0x71615)
+    at il2cpp::os::PathErrnoToErrorCode(std::__2::basic_string<char, std::__2::char_traits<char>, std::__2::allocator<char>> const&, int) (wasm://wasm/09f1a45a:wasm-function[1132]:0x74266)
+    at il2cpp::os::File::Open(std::__2::basic_string<char, std::__2::char_traits<char>, std::__2::allocator<char>> const&, int, int, int, int, int*) (wasm://wasm/09f1a45a:wasm-function[1152]:0x74890)
+    at dynCall_iiiiiii (wasm://wasm/09f1a45a:wasm-function[103808]:0x1a51aae)
+    at afd4b7de-f946-49e2-85c5-3d0e823004de:999
+    at invoke_iiiiiii (afd4b7de-f946-49e2-85c5-3d0e823004de:18412)
+    at il2cpp::utils::DebugSymbolReader::LoadDebugSymbols() (wasm://wasm/09f1a45a:wasm-function[1297]:0x7bcba)
+    at dynCall_i (wasm://wasm/09f1a45a:wasm-function[103801]:0x1a51a38)
+    at afd4b7de-f946-49e2-85c5-3d0e823004de:999
+```
+Cause:
+
+Missing function definition - doAccess() in SYSCALLS.
+
+Workaround:
+
+Add the following snippet to the `webgl.framework.js` in the `zip` file.
+
+```javascript
+var SYSCALLS = Module.StarkSYSCALLS = {...,
+  doAccess: function(path, amode) {
+    if (amode & ~7) {
+      // need a valid mode
+      return -28;
+    }
+    try {
+      var lookup = FS.lookupPath(path, { follow: true });
+      var node = lookup.node;
+      if (!node) {
+        return -44;
       }
-      try {
-        var lookup = FS.lookupPath(path, { follow: true });
-        var node = lookup.node;
-        if (!node) {
-          return -44;
-        }
-        var perms = '';
-        if (amode & 4) perms += 'r';
-        if (amode & 2) perms += 'w';
-        if (amode & 1) perms += 'x';
-        if (perms /* otherwise, they've just passed F_OK */ && FS.nodePermissions(node, perms)) {
-          return -2;
-        }
-        return 0;
-      } catch (e) {
-        if (typeof FS == 'undefined' || !(e.name === 'ErrnoError')) throw e;
-        return -e.errno;
+      var perms = '';
+      if (amode & 4) perms += 'r';
+      if (amode & 2) perms += 'w';
+      if (amode & 1) perms += 'x';
+      if (perms /* otherwise, they've just passed F_OK */ && FS.nodePermissions(node, perms)) {
+        return -2;
       }
+      return 0;
+    } catch (e) {
+      if (typeof FS == 'undefined' || !(e.name === 'ErrnoError')) throw e;
+      return -e.errno;
     }
   }
-  ```
+}
+```
 
